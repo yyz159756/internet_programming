@@ -1,8 +1,7 @@
-package chapter01;
+package chapter02;
 
 import javafx.application.Application;
 import javafx.application.Platform;
-import javafx.event.EventHandler;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -11,7 +10,6 @@ import javafx.scene.control.Label;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.input.KeyCode;
-import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -20,8 +18,8 @@ import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
 import java.io.File;
+import java.io.IOException;
 import java.time.LocalDateTime;
-import java.util.ResourceBundle;
 
 public class win extends Application {
 
@@ -33,11 +31,43 @@ public class win extends Application {
     private TextField tfSend = new TextField();
     //显示信息的文本区域
     private TextArea taDisplay = new TextArea();
+    private TextField ipInput = new TextField();
+    private TextField portInput = new TextField();
+    private Button btnConn = new Button("连接");
+    private String ip;
+    private String port;
+    private TCPClient tcpClient;
 
     public static void main(String[] args) {
         launch(args);
     }
 
+    public void sendMsgToTaDisplay(String msg) {
+        if (!"".equals(msg)) {
+            taDisplay.appendText(msg + "\n");
+            tfSend.clear();
+        }
+    }
+    public void exitSystem(){
+        if(tcpClient != null){
+            //向服务器发送关闭连接的约定信息
+            tcpClient.send("bye");
+            try {
+                taDisplay.appendText(tcpClient.receive() + "\n");
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            tcpClient.close();
+        }
+        System.exit(0);
+    }
+    public void sendMsgToServer(String msg) throws IOException {
+        if (!"".equals(msg) && tcpClient != null) {
+            tcpClient.send(msg);
+            taDisplay.appendText(tcpClient.receive() + "\n");
+        }
+
+    }
 
     @Override
     public void start(Stage primaryStage) {
@@ -55,13 +85,21 @@ public class win extends Application {
             }
         });
         // 退出按钮时间
-        btnExit.setOnAction(event -> {System.exit(0);});
+        btnExit.setOnAction(event -> {
+            exitSystem();
+        });
+        // 窗口右上角退出
+        primaryStage.setOnCloseRequest(event -> {
+            exitSystem();
+        });
         // 发送按钮事件
         btnSend.setOnAction(event -> {
             String msg = tfSend.getText();
-            if (!"".equals(msg)) {
-                taDisplay.appendText(msg + "\n");
-                tfSend.clear();
+            sendMsgToTaDisplay(msg);
+            try {
+                sendMsgToServer(msg);
+            } catch (IOException e) {
+                e.printStackTrace();
             }
         });
         // 回车绑定事件
@@ -71,14 +109,17 @@ public class win extends Application {
                 String mess = tfSend.getText().trim();
                 if (!"".equals(mess)) {
                     event.consume(); // otherwise a new line will be added to the textArea after the sendFunction() call
+                    String msg;
                     if (event.isShiftDown()) {
-                        String msg = "echo: " + tfSend.getText();
-                        taDisplay.appendText(msg + "\n");
-                        tfSend.clear();
+                        msg = "echo: " + tfSend.getText();
                     } else {
-                        String msg = tfSend.getText();
-                        taDisplay.appendText(msg + "\n");
-                        tfSend.clear();
+                        msg = tfSend.getText();
+                    }
+                    sendMsgToTaDisplay(msg);
+                    try {
+                        sendMsgToServer(msg);
+                    } catch (IOException e) {
+                        e.printStackTrace();
                     }
                 }
             }
@@ -92,7 +133,7 @@ public class win extends Application {
             for (String value : textArray) {
                 text.append(value).append("\r\n");
             }
-            String s=text.toString();
+            String s = text.toString();
             // 选择文件窗口
             FileChooser fileChooser = new FileChooser();
             // 保存选择的文件到file
@@ -108,20 +149,42 @@ public class win extends Application {
             File file = fileChooser.showOpenDialog(null);
             String msg = textFileIO.load(file);
             System.out.println("output msg: " + msg);
-            if(msg != null){
+            if (msg != null) {
                 taDisplay.clear();
                 taDisplay.setText(msg);
             }
         });
+        // 连接按钮事件
+        btnConn.setOnAction(event -> {
+            this.ip = ipInput.getText();
+            this.port = portInput.getText();
+            if (ip.equals("") || port.equals("")) {
+                taDisplay.appendText("ip或者port不能为空\n");
+            } else {
+                try {
+                    this.tcpClient = new TCPClient(ip, port);
+                    taDisplay.appendText(tcpClient.receive() + "\n");
+                } catch (IOException e) {
+                    taDisplay.appendText("连接失败\n");
+                }
+            }
 
-        BorderPane mainPane = new BorderPane();
+        });
         //内容显示区域
+        BorderPane mainPane = new BorderPane();
+        // ip连接显示控件
+        HBox topHBox = new HBox();
+        topHBox.setSpacing(10);//各控件之间的间隔
+        //VBox面板中的内容距离四周的留空区域 内距
+        topHBox.setPadding(new Insets(10, 20, 10, 20));
+        topHBox.getChildren().addAll(new Label("IP地址："),
+                ipInput, new Label("端口号："), portInput, btnConn);
         VBox vBox = new VBox();
         vBox.setSpacing(10);//各控件之间的间隔
         //VBox面板中的内容距离四周的留空区域 内距
-        vBox.setPadding(new Insets(10,20,10,20));
-        vBox.getChildren().addAll(new Label("信息显示区："),
-                taDisplay,new Label("信息输入区："), tfSend);
+        vBox.setPadding(new Insets(10, 20, 10, 20));
+        vBox.getChildren().addAll(topHBox, new Label("信息显示区："),
+                taDisplay, new Label("信息输入区："), tfSend);
         //设置显示信息区的文本区域可以纵向自动扩充范围
         VBox.setVgrow(taDisplay, Priority.ALWAYS);
 
@@ -129,11 +192,11 @@ public class win extends Application {
         //底部按钮区域
         HBox hBox = new HBox();
         hBox.setSpacing(10);
-        hBox.setPadding(new Insets(10,20,10,20));
+        hBox.setPadding(new Insets(10, 20, 10, 20));
         hBox.setAlignment(Pos.CENTER_RIGHT);
-        hBox.getChildren().addAll(btnSend,btnSave,btnOpen,btnExit);
+        hBox.getChildren().addAll(btnSend, btnSave, btnOpen, btnExit);
         mainPane.setBottom(hBox);
-        Scene scene = new Scene(mainPane,700,400);
+        Scene scene = new Scene(mainPane, 700, 400);
         primaryStage.setScene(scene);
         primaryStage.show();
 

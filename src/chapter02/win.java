@@ -31,8 +31,8 @@ public class win extends Application {
     private TextField tfSend = new TextField();
     //显示信息的文本区域
     private TextArea taDisplay = new TextArea();
-    private TextField ipInput = new TextField();
-    private TextField portInput = new TextField();
+    private TextField ipInput = new TextField("127.0.0.1");
+    private TextField portInput = new TextField("8008");
     private Button btnConn = new Button("连接");
     private String ip;
     private String port;
